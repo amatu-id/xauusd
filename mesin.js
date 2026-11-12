@@ -3468,7 +3468,7 @@ function susunNarasi(sym, mode, st) {
 // price action 2 dtk; memori belajar 3 dtk; rekap jam/sesi/harian; jurnal 1 mnt; kebiasaan 2 mnt; prediksi tiap candle
 // 15m/1h tutup atau 5 mnt; lab otonom dan uji walk-forward harian / saat diminta. Segarkan = bangunkan semua loop,
 // berurutan feed → memori → rencana. Hanya membaca pasar — tidak pernah mengirim order.
-const VERSI_WEB = 'd01ba020f4db';
+const VERSI_WEB = 'a91b5e7ac1a9';
 const JEDA_LOOP = { feed: 1.0, hitung: 2.0, berkala: 5.0, belajar: 3.0 };
 
 class Putaran {

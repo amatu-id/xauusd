@@ -7,9 +7,9 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const ST = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
              set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 const LIVE_OPS = [1, 2, 5, 15, 0];      // detik antar pembaruan otomatis; 0 = jeda (hanya tombol Segarkan)
-const S = { sym: ST.get('tr-sym', 'XAUUSDm'), mode: ST.get('tr-mode', 'scalp'), st: null, rk: null, tvKey: '', petaTf: null,
+const S = { sym: ST.get('xauusd.sym', 'XAUUSDm'), mode: ST.get('xauusd.mode', 'scalp'), st: null, rk: null, tvKey: '', petaTf: null,
             peta: null, petaT: 0, modal: null,
-            live: LIVE_OPS.includes(ST.get('tr-live', 1)) ? ST.get('tr-live', 1) : 1, dn: null, tOk: 0, gagal: 0, putaran: {},
+            live: LIVE_OPS.includes(ST.get('xauusd.live', 1)) ? ST.get('xauusd.live', 1) : 1, dn: null, tOk: 0, gagal: 0, putaran: {},
             tState: 0, tRk: 0, tTick: 0, tHilang: 0, segar: false, segarHasil: null, lama: false, webBaru: false,
             web0: /^[0-9a-f]{6,}$/.test(document.documentElement.dataset.web || '') ? document.documentElement.dataset.web : '' };
 (() => { const q = new URLSearchParams(location.search);       // ?sym=XAUUSDm&mode=swing (opsional)
@@ -1075,7 +1075,7 @@ function cekVersi(v) {
   renderBanner();
 }
 function muatUlang() {                                  // halaman + chart dimuat dari awal (memori tetap di IndexedDB)
-  ST.set('tr-sym', S.sym); ST.set('tr-mode', S.mode);
+  ST.set('xauusd.sym', S.sym); ST.set('xauusd.mode', S.mode);
   try { MESIN.w && MESIN.w.postMessage({ id: 0, path: 'simpan' }); } catch (e) {}
   if (location.search || location.hash) location.replace(location.pathname); else location.reload();
 }
@@ -1125,7 +1125,7 @@ function menuLive(buka) {
 function pasangLive() {
   $('#live-btn').onclick = () => menuLive();
   $$('#live-menu [data-live]').forEach(b => b.onclick = () => {
-    S.live = +b.dataset.live; ST.set('tr-live', S.live); menuLive(false); liveUi(); detak();
+    S.live = +b.dataset.live; ST.set('xauusd.live', S.live); menuLive(false); liveUi(); detak();
     toast(S.live === 0 ? 'Pembaruan otomatis dijeda. Tekan ⌘R untuk menyegarkan.' : S.live === 1 ? 'Pembaruan real-time: harga tiap detik.' : `Pembaruan otomatis tiap ${S.live} detik.`);
   });
   $('#lm-segar').onclick = () => segarkan();
@@ -1154,7 +1154,7 @@ function pasangLive() {
 
 function pilih(sym, mode) {
   if (sym) S.sym = sym; if (mode) S.mode = mode;
-  ST.set('tr-sym', S.sym); ST.set('tr-mode', S.mode);
+  ST.set('xauusd.sym', S.sym); ST.set('xauusd.mode', S.mode);
   S.st = null; S.peta = null; S.petaTf = null; S.petaT = 0; renderPairs(); pollBaru();
 }
 
@@ -1183,7 +1183,7 @@ function init() {
   $('#btn-penuh').onclick = () => {
     if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.();
   };
-  $('#btn-tema').onclick = () => { const cur = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = cur; try { localStorage.setItem('tr-tema', cur); } catch (e) {} renderAll(); };
+  $('#btn-tema').onclick = () => { const cur = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = cur; try { localStorage.setItem('xauusd.tema', cur); } catch (e) {} renderAll(); };
   $('#btn-setelan').onclick = () => {
     const s = S.st?.setelan || {}; $('#s-saldo').value = s.saldo ?? ''; $('#s-uang').value = s.mata_uang || 'IDR'; $('#s-risiko').value = s.risiko_pct ?? 1; $('#s-kurs').value = Math.round(s.usd_idr || 16500);
     $('#s-info').textContent = 'Lot dihitung dari saldo x risiko ÷ (jarak SL x ukuran kontrak). Setelan disimpan di perangkat ini.';
