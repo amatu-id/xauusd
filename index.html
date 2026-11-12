@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="id" data-web="d01ba020f4db">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading AI Yulius · XAUUSD</title>
+<meta name="description" content="Trading AI Yulius versi web: XAUUSDm &amp; BTCUSDT, sinyal price action dari memori belajar, rencana strategi lab otonom, memori kebiasaan pasar, prediksi analog. Semua dihitung di browser.">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%226%22 fill=%22%233b82f6%22/%3E%3Cpath d=%22M5 16l4-4 3 3 6-7%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.2%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="trading.css?v=d01ba020f4db">
+<script>try{const t=localStorage.getItem('tr-tema');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<svg width="0" height="0" class="hidden" aria-hidden="true">
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></symbol>
+  <symbol id="i-penuh" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-tema" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></symbol>
+  <symbol id="i-gir" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-salin" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-lebar" viewBox="0 0 24 24"><path d="M15 4h5v5M9 20H4v-5M20 4l-7 7M4 20l7-7"/></symbol>
+  <symbol id="i-segar" viewBox="0 0 24 24"><path d="M20.5 4.5v5h-5"/><path d="M19.6 14.6A8 8 0 1 1 18.3 6.9l2.2 2.6"/></symbol>
+  <symbol id="i-bawah" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
+    <div><b>Trading AI Yulius</b><small id="subjudul" data-tip="sub">memuat data pasar…</small></div>
+  </div>
+  <div class="pairs" id="pairs">
+    <button class="pair" data-sym="BTCUSDT" data-tip="pair" data-a="BTCUSDT"><span class="pn">BTCUSDT</span><span class="pp" data-px>-</span><span class="pc" data-chg></span><span class="ps" data-sig></span></button>
+    <button class="pair" data-sym="XAUUSDm" data-tip="pair" data-a="XAUUSDm"><span class="pn">XAUUSDm</span><span class="pp" data-px>-</span><span class="pc" data-chg></span><span class="ps" data-sig></span></button>
+  </div>
+  <div class="seg" id="mode-seg" role="tablist">
+    <button data-mode="scalp" data-tip="mode" data-a="scalp">Scalping</button>
+    <button data-mode="swing" data-tip="mode" data-a="swing">Swing</button>
+  </div>
+  <div class="feeds" id="feeds"></div>
+  <div class="live on" id="live">
+    <button class="live-btn" id="live-btn" data-tip="live" aria-haspopup="menu" aria-expanded="false" aria-label="Status dan kecepatan pembaruan data">
+      <i class="dot"></i><b id="live-lbl">LIVE</b><span class="clock" id="clock">--.--.--</span><svg class="car"><use href="#i-bawah"/></svg></button>
+    <div class="live-menu hidden" id="live-menu" role="menu" aria-label="Pembaruan otomatis">
+      <div class="lm-h">Pembaruan otomatis</div>
+      <button role="menuitemradio" data-live="1">Real-time<small>harga tiap 1 detik</small></button>
+      <button role="menuitemradio" data-live="2">Tiap 2 detik</button>
+      <button role="menuitemradio" data-live="5">Tiap 5 detik</button>
+      <button role="menuitemradio" data-live="15">Tiap 15 detik</button>
+      <button role="menuitemradio" data-live="0">Jeda<small>hanya saat disegarkan</small></button>
+      <hr>
+      <button role="menuitem" id="lm-segar">Segarkan semua sekarang<kbd>⌘R</kbd></button>
+      <button role="menuitem" id="lm-muat">Muat ulang halaman + chart<kbd>⇧⌘R</kbd></button>
+    </div>
+  </div>
+  <button class="ic" id="btn-segar" data-tip="segar" aria-label="Segarkan semua data sekarang (⌘R)"><svg><use href="#i-segar"/></svg></button>
+  <button class="ic" id="btn-analisis" data-tip="analisis" aria-label="Analisis lengkap AI Yulius"><svg><use href="#i-doc"/></svg></button>
+  <button class="ic" id="btn-penuh" data-tip="penuh" aria-label="Layar penuh"><svg><use href="#i-penuh"/></svg></button>
+  <button class="ic" id="btn-tema" data-tip="tema" aria-label="Tema terang/gelap"><svg><use href="#i-tema"/></svg></button>
+  <button class="ic" id="btn-setelan" data-tip="setelan" aria-label="Setelan modal dan risiko"><svg><use href="#i-gir"/></svg></button>
+</header>
+
+<main class="layar" id="layar">
+  <!-- ============ kolom 1: pasar ============ -->
+  <section class="kol k1">
+    <div class="panel chart-wrap"><div id="tv" class="tv"></div><div id="tv-off" class="tv-off hidden">Chart TradingView butuh koneksi internet.</div></div>
+    <div class="panel peta-wrap">
+      <div class="ph" data-tip="peta_h"><h3>Peta sinyal AI</h3><span class="muted" id="peta-judul"></span><span class="sp"></span>
+        <span class="leg" data-tip="peta_leg"><i class="lg-pa"></i>pola PA<i class="lg-e"></i>entry<i class="lg-s"></i>SL<i class="lg-t"></i>TP<i class="lg-l"></i>level</span>
+        <div class="seg kecil" id="peta-tf"></div></div>
+      <canvas id="peta" class="peta" data-tip="peta" data-gerak></canvas><div class="peta-hl hidden" id="peta-hl"></div>
+    </div>
+    <div class="panel gerak" id="gerak"></div>
+  </section>
+
+  <!-- ============ kolom 2: keputusan ============ -->
+  <section class="kol k2">
+    <div class="panel keputusan" id="keputusan">
+      <div class="kp-top" data-tip="kp"><span class="kp-aksi" id="kp-aksi">-</span><div class="kp-meta"><b id="kp-judul">Menyiapkan…</b><small id="kp-sub"></small></div></div>
+      <div class="unc" id="unc" data-tip="unc"></div>
+      <div class="kondisi" id="kondisi"></div>
+    </div>
+
+    <div class="panel pa" id="pa">
+      <div class="ph" data-tip="pa_h"><h3>Sinyal price action</h3><small class="muted">dari memori belajar</small><span class="sp"></span><span id="pa-chips"></span></div>
+      <div class="pa-body" id="pa-body"></div>
+      <div class="aksi-bar"><button class="btn" id="btn-salin-pa" data-tip="salin_pa"><svg><use href="#i-salin"/></svg>Salin sinyal</button>
+        <button class="btn utama" id="btn-tanya" data-tip="tanya"><svg><use href="#i-chat"/></svg>Tanya AI Yulius</button></div>
+    </div>
+
+    <div class="panel rc" id="rc">
+      <div class="ph" data-tip="rc_h"><h3>Rencana strategi</h3><small class="muted" id="rc-sub">lab otonom</small><span class="sp"></span><span id="rc-chips"></span></div>
+      <div class="rc-body" id="rc-body"></div>
+      <div class="aksi-bar"><button class="btn" id="btn-salin" data-tip="salin"><svg><use href="#i-salin"/></svg>Salin order</button>
+        <button class="btn ghost" id="btn-alt" data-tip="alt">Strategi lain</button><button class="btn ghost" id="btn-lab" data-tip="lab">Lab</button>
+        <button class="btn ghost" id="btn-jurnal" data-tip="jurnal">Jurnal</button></div>
+    </div>
+
+    <div class="panel pred" id="kartu-prediksi">
+      <div class="ph" data-tip="pred_h"><h3>Prediksi analog</h3><small class="muted">peluang, bukan kepastian</small></div>
+      <div id="prediksi"></div>
+    </div>
+  </section>
+
+  <!-- ============ kolom 3: memori & belajar ============ -->
+  <section class="kol k3">
+    <div class="panel kb" id="kb">
+      <div class="ph" data-tip="kb_h"><h3>Memori kebiasaan pasar</h3><small class="muted" id="kb-t" data-tip="kb_t"></small><span class="sp"></span><button class="lnk" id="btn-level" data-tip="level">Level kunci</button></div>
+      <div id="kb-body"></div>
+    </div>
+
+    <div class="panel bl" id="bl">
+      <div class="ph" data-tip="bl_h"><h3>Belajar price action</h3><small class="muted" id="bl-sub" data-tip="bl_sub"></small><span class="sp"></span><button class="lnk" id="btn-pola" data-tip="pola_btn">Semua pola</button></div>
+      <div id="bl-body"></div>
+    </div>
+
+    <div class="panel rk" id="rk">
+      <div class="ph" data-tip="rk_h"><h3>Rekap memori</h3><small class="muted">tiap jam, sesi, hari</small><span class="sp"></span><button class="lnk" id="btn-rekap" data-tip="rekap_btn">Riwayat</button></div>
+      <div id="rk-body" class="rk-body"></div>
+    </div>
+
+    <div class="panel ak" id="ak">
+      <div class="ph" data-tip="ak_h"><h3>Aktivitas AI</h3><small class="muted">keputusan otonom</small><span class="sp"></span><button class="lnk" id="btn-pikiran" data-tip="pikir_btn">Semua</button></div>
+      <div id="ak-body" class="ak-body"></div>
+    </div>
+  </section>
+</main>
+<div id="banner" class="banner hidden"></div>
+
+<!-- jendela sembul serbaguna -->
+<div class="modal hidden" id="modal"><div class="box lebar"><div class="mh"><h3 id="modal-judul"></h3><span class="sp"></span><span id="modal-aksi"></span>
+  <button class="btn ghost" id="modal-tutup">Tutup</button></div><div class="mb" id="modal-isi"></div></div></div>
+
+<div class="modal hidden" id="modal-setelan">
+  <div class="box">
+    <h3>Setelan modal &amp; risiko</h3>
+    <label data-tip="s_saldo">Saldo akun<input id="s-saldo" type="number" min="0" step="1000"></label>
+    <label data-tip="s_uang">Mata uang<select id="s-uang"><option>IDR</option><option>USD</option></select></label>
+    <label data-tip="s_risiko">Risiko per posisi (%)<input id="s-risiko" type="number" min="0.05" max="10" step="0.05"></label>
+    <label data-tip="s_kurs">Kurs USD/IDR<input id="s-kurs" type="number" min="1000" step="1"></label>
+    <p class="muted" id="s-info"></p>
+    <div class="aksi-bar"><button class="btn ghost" id="s-reset" data-tip="s_reset">Setelan bawaan</button><span class="sp"></span>
+      <button class="btn ghost" id="s-batal">Batal</button><button class="btn utama" id="s-simpan">Simpan</button></div>
+  </div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast hidden" id="toast"></div>
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script src="trading.js?v=d01ba020f4db"></script>
+</body>
+</html>
