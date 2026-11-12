@@ -131,6 +131,8 @@ svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-l
 .keputusan.wait .kp-aksi{background:var(--wait-bg);color:var(--wait)}
 .keputusan.warn .kp-aksi{background:var(--wait-bg);color:var(--wait)}
 .keputusan.buy{border-color:rgba(22,199,132,.55)}.keputusan.sell{border-color:rgba(234,57,67,.55)}
+.keputusan.jalan .kp-aksi{background:var(--panel2);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.keputusan.jalan{border-color:rgba(59,130,246,.55)}
 .kp-meta{min-width:0;flex:1}
 .kp-meta b{display:block;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kp-meta small{display:block;font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -171,6 +173,8 @@ svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-l
 .lv .t b{color:var(--tp)}
 .lv .t .pb{height:.25rem;border-radius:.2rem;background:var(--line);margin-top:.2rem;overflow:hidden}
 .lv .t .pb i{display:block;height:100%;background:var(--tp)}
+.lv em i{font-style:normal}.lv em .up{color:var(--buy)}.lv em .dn{color:var(--sell)}
+.lv .t.lewat{opacity:.55}
 .lv.lima{grid-template-columns:minmax(0,1.2fr) repeat(4,minmax(0,1fr))}
 .lv.lima .e,.lv.lima .s{grid-column:auto}
 .lv.lima b,.lv.lima .e b{font-size:.95rem}

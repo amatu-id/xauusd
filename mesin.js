@@ -1697,6 +1697,33 @@ function statistikStrategi(sid, sym, m) {
 const tpDari = (e, d, R0) => [1, 2, 3].map(k => e + d * k * R0);
 const lotOf = lt => (lt ? lt.lot : null);
 
+/** Keadaan basket yang SUDAH berjalan, aturan sama dengan uji balik (lot sama per layer, 1R = jarak SL awal satu layer):
+ *  layer terisi, harga rata-rata, hasil basket sekarang & bila SL kena (R, sudah dikurangi biaya), SL sudah digeser trailing
+ *  atau belum, harga terbaik sejak masuk, dan layer berikutnya + SL basket barunya (rencana.py _posisi).
+ *  Posisi berjalan BUKAN sinyal entry baru: SL-nya bisa sudah melewati entry (untung terkunci). */
+function posisiBerjalan(o, px, p, biayaPct, stepBawaan = 1.0) {
+  const d = Math.trunc(o.d), R0 = +o.R0, sl = +o.sl, sl0 = +o.sl0, fills = o.fills.map(f => +f[0]), n = fills.length;
+  const biaya = jumlah(fills.map(f => biayaPct * f)) / R0;
+  const out = { terisi: n, avg: jumlah(fills) / n, sejak: o.t, sl_awal: sl0,
+    r_kini: jumlah(fills.map(f => (px - f) * d)) / R0 - biaya, r_sl: jumlah(fills.map(f => (sl - f) * d)) / R0 - biaya,
+    sl_geser: (sl - sl0) * d > 1e-9 * Math.max(1, Math.abs(sl0)), kena_sl: (px - sl) * d <= 0, tutup: o.batas ?? null };
+  out.kunci = out.r_sl > 0;
+  if (o.ext != null) { out.terbaik = +o.ext; out.r_terbaik = (o.ext - fills[0]) * d / R0; }
+  if (n < Math.trunc(ambil(p, 'layers', 1))) {
+    const step = +ambil(p, 'add_step', stepBawaan), lock = +ambil(p, 'lock_r', 1.0), gap = +ambil(p, 'add_gap', 1.0), a0 = +o.atr;
+    const lvl = fills[n - 1] + d * step * a0, V2 = n + 1, sreq = (jumlah(fills) + lvl) / V2 - d * lock * R0 / V2;
+    const snew = d > 0 ? Math.max(sl, sreq) : Math.min(sl, sreq);
+    out.berikut = { ke: n + 1, harga: lvl, jenis: d > 0 ? 'Buy stop' : 'Sell stop', sl_basket: snew, ok: (lvl - snew) * d >= gap * a0 };
+  }
+  return out;
+}
+/** Layer posisi berjalan: yang terisi + layer berikutnya (bila ada) dengan SL basket setelah ia terisi. */
+function layerBerjalan(ps, fills, lot) {
+  const out = fills.map((f, i) => ({ ke: i + 1, harga: f, lot, jenis: 'Terisi', sl_basket: null })), b = ps.berikut;
+  if (b) out.push({ ke: b.ke, harga: b.harga, lot, jenis: b.ok ? 'Tambah berikutnya' : 'Tambah (menunggu ruang SL)', sl_basket: b.sl_basket });
+  return out;
+}
+
 function kandidatTrend(P, sa, sym, px, setelan, pengali) {
   const sid = sa.sid, p = sa.params;
   const n = { '15m': 2200, '1h': 1600, '4h': 1300 }[p.tf] || 1500;
@@ -1711,12 +1738,11 @@ function kandidatTrend(P, sa, sym, px, setelan, pengali) {
   const op = res.open, frs = res.fresh;
   if (op) {
     const d = op.d, e0 = op.fills[0][0], R0 = op.R0, lt = hitungLot(setelan, sym, R0, pengali);
-    const fills = op.fills.map(f => f[0]);
-    const layer = fills.map((f, i) => ({ ke: i + 1, harga: f, lot: lotOf(lt), jenis: 'Terisi', sl_basket: op.sl }));
-    if (fills.length < Math.trunc(ambil(p, 'layers', 1))) layer.push({ ke: fills.length + 1, harga: fills[fills.length - 1] + d * +ambil(p, 'add_step', 1.0) * op.atr, lot: lotOf(lt), jenis: 'Tambah berikutnya', sl_basket: null });
-    alasan.push(`Posisi berjalan sejak ${wib(op.t, '%d/%m %H:%M')} WIB; SL sudah digeser trailing ke ${fmt(op.sl)}.`);
+    const fills = op.fills.map(f => f[0]), ps = posisiBerjalan(op, px, p, SIMBOL[sym].biaya_pct);
+    const layer = layerBerjalan(ps, fills, lotOf(lt));
+    alasan.push(`Posisi berjalan sejak ${wib(op.t, '%d/%m %H:%M')} WIB; ` + (ps.sl_geser ? `SL sudah digeser trailing ke ${fmt(op.sl)}.` : `SL masih di posisi awal ${fmt(op.sl)}.`));
     return [{ ...base, status: 'AKTIF', arah: d, entry: e0, sl: op.sl, sl_awal: op.sl0, r0: R0, tp: tpDari(e0, d, R0), layer, lot: lt,
-      maju_r: (px - e0) * d / R0, t_sinyal: op.t, pemicu: 'Sudah masuk (sinyal sebelumnya)', jenis_entry: 'berjalan',
+      maju_r: (px - e0) * d / R0, t_sinyal: op.t, posisi: ps, pemicu: 'Sudah masuk (sinyal sebelumnya)', jenis_entry: 'berjalan',
       trailing: `Chandelier ${fg(kt)} x ATR ${tf} dari harga terbaik (${fmt(op.ext)})`, alasan }, res];
   }
   if (frs) {
@@ -1774,12 +1800,11 @@ function kandidatSesi(P, sa, sym, px, setelan, pengali) {
   const ops = (res.open || []).filter(o => o.t >= d0);
   if (ops.length) {
     const o = ops.reduce((x, y) => (y.t > x.t ? y : x)), d = o.d, e0 = o.fills[0][0], R0 = o.R0, lt = hitungLot(setelan, sym, R0, pengali);
-    const fills = o.fills.map(f => f[0]);
-    const layer = fills.map((f, i) => ({ ke: i + 1, harga: f, lot: lotOf(lt), jenis: 'Terisi', sl_basket: o.sl }));
-    if (fills.length < Math.trunc(ambil(p, 'layers', 1))) layer.push({ ke: fills.length + 1, harga: fills[fills.length - 1] + d * +p.add_step * o.atr, lot: lotOf(lt), jenis: 'Tambah berikutnya', sl_basket: null });
+    const fills = o.fills.map(f => f[0]), ps = posisiBerjalan(o, px, p, SIMBOL[sym].biaya_pct, 2.0);
+    const layer = layerBerjalan(ps, fills, lotOf(lt));
     alasan.push(`Basket ${AB(d)} berjalan sejak ${wib(o.t)} WIB, ${fills.length} layer terisi.`);
     return [{ ...base, status: 'AKTIF', arah: d, entry: e0, sl: o.sl, sl_awal: o.sl0, r0: R0, tp: tpDari(e0, d, R0), layer, lot: lt,
-      maju_r: (px - e0) * d / R0, t_sinyal: o.t, pemicu: 'Sudah masuk', jenis_entry: 'berjalan',
+      maju_r: (px - e0) * d / R0, t_sinyal: o.t, posisi: ps, pemicu: 'Sudah masuk', jenis_entry: 'berjalan',
       trailing: `Trailing ${fg(p.trail_atr)} x ATR H1 mulai +${fg(p.trail_start_r)}R; tutup ${wib(o.batas)} WIB`, alasan }, res];
   }
   if (hari.hari !== d0 || hari.hi == null) return [{ ...base, status: 'TUNGGU', arah: 0, alasan: [...alasan, 'Menunggu range sesi hari ini.'], pemicu: `Range terbentuk sampai ${wib(d0 + re_ * HOUR)} WIB` }, res];
@@ -1821,8 +1846,9 @@ function kandidatSqueeze(P, sa, sym, px, setelan, pengali) {
   const op = res.open, frs = res.fresh, sla = +p.sl_atr, tpa = +p.tp_atr;
   if (op) {
     const d = op.d, lt = hitungLot(setelan, sym, op.R0, pengali);
-    return [{ ...base, status: 'AKTIF', arah: d, entry: op.e, sl: op.sl, r0: op.R0, tp: [op.e + d * op.R0, op.tp, op.tp + d * op.R0], lot: lt, t_sinyal: op.t,
-      layer: [{ ke: 1, harga: op.e, lot: lotOf(lt), jenis: 'Terisi', sl_basket: op.sl }], maju_r: (px - op.e) * d / op.R0, pemicu: 'Sudah masuk',
+    return [{ ...base, status: 'AKTIF', arah: d, entry: op.e, sl: op.sl, sl_awal: op.sl0, r0: op.R0, tp: [op.e + d * op.R0, op.tp, op.tp + d * op.R0], lot: lt, t_sinyal: op.t,
+      posisi: posisiBerjalan({ ...op, atr: op.atr ?? 0 }, px, { layers: 1 }, SIMBOL[sym].biaya_pct),
+      layer: [{ ke: 1, harga: op.e, lot: lotOf(lt), jenis: 'Terisi', sl_basket: null }], maju_r: (px - op.e) * d / op.R0, pemicu: 'Sudah masuk',
       jenis_entry: 'berjalan', trailing: `SL/TP tetap (${fg(sla)} / ${fg(tpa)} x ATR)`, alasan: ['Breakout squeeze sedang berjalan.'] }, res];
   }
   if (frs) {
@@ -1886,6 +1912,10 @@ function susunRencana(P, sym, mode, aktif, setelan, kb, ramalan, fwdStats, px) {
         }
       }
     }
+    const ps = k.posisi;
+    if (ps && k.lot) {         // uang per 1R per layer = rugi SL awal satu layer dengan lot rencana
+      ps.uang_kini = ps.r_kini * k.lot.rugi_sl; ps.uang_sl = ps.r_sl * k.lot.rugi_sl; ps.mata_uang = k.lot.mata_uang;
+    }
     k.forward = fwdStats[sa.sid] || null;
     k.mutu = kualitas(k, k.forward, ramalan, rz);
     k.skor = skorRencana(k, k.forward, ramalan, rz);
@@ -1901,12 +1931,31 @@ function susunRencana(P, sym, mode, aktif, setelan, kb, ramalan, fwdStats, px) {
 /** Ringkasan siap salin (format MT5: titik desimal, tanpa pemisah ribuan). */
 function teksOrder(sym, k) {
   if (!k || k.aksi === 'TUNGGU' || k.entry == null) return '';
+  if (k.status === 'AKTIF' && k.posisi) return teksKelola(sym, k);
   const dp = SIMBOL[sym].dp, f = v => (+v).toFixed(dp), lot = (k.lot || {}).lot;
   const b = [`${sym} ${k.aksi} (${k.nama}, ${k.status})`, `Entry: ${f(k.entry)} [${k.jenis_entry || ''}]`, `SL: ${f(k.sl)}`];
   (k.tp || []).forEach((t, i) => b.push(`TP${i + 1}: ${f(t)}`));
   for (const L of (k.layer || []).slice(1)) b.push(`Layer ${L.ke}: ${f(L.harga)}` + (L.lot ? ` lot ${L.lot}` : '') + (L.sl_basket ? ` (SL basket ${f(L.sl_basket)})` : ''));
   if (lot) b.push(`Lot per layer: ${lot}`);
   if (k.trailing) b.push(`Trailing: ${k.trailing}`);
+  return b.join('\n');
+}
+/** Posisi strategi yang SUDAH berjalan: teks kelola posisi (bukan order baru). Entry lama tidak bisa dipasang lagi dan SL
+ *  trailing-nya bisa sudah melewati entry, jadi yang belum punya posisi diminta menunggu sinyal berikutnya (rencana.teks_kelola). */
+function teksKelola(sym, k) {
+  const dp = SIMBOL[sym].dp, f = v => (+v).toFixed(dp), ps = k.posisi, lot = (k.lot || {}).lot, mu = ps.mata_uang || '';
+  const hasil = fr(ps.r_sl) + (ps.uang_sl != null ? ` ≈ ${fs(ps.uang_sl, 0)} ${mu}` : '');
+  const b = [`${sym} ${k.aksi} — POSISI BERJALAN, bukan order baru (${k.nama})`,
+    `Masuk ${wib(ps.sejak, '%d/%m %H:%M')} WIB · ${ps.terisi} layer terisi · rata-rata ${f(ps.avg)}`];
+  for (const L of k.layer || []) if (L.jenis === 'Terisi') b.push(`L${L.ke} terisi: ${f(L.harga)}` + (L.lot ? ` lot ${L.lot}` : ''));
+  b.push(`SL semua layer: ${f(k.sl)} (${ps.sl_geser ? 'trailing' : 'awal'}; bila kena ${hasil}${ps.kunci ? ', untung terkunci' : ''})`);
+  if (ps.sl_geser && ps.sl_awal != null) b.push(`SL awal: ${f(ps.sl_awal)} (1R ${f(k.r0)})`);
+  (k.tp || []).forEach((t, i) => b.push(`TP${i + 1} (${i + 1}R): ${f(t)}` + (ps.terbaik != null && (ps.terbaik - t) * k.arah >= 0 ? ' (sudah tersentuh)' : '')));
+  const nx = ps.berikut;
+  if (nx) b.push(`L${nx.ke} berikutnya: ${nx.jenis} ${f(nx.harga)}` + (lot ? ` lot ${lot}` : '') + `, lalu SL semua layer ${f(nx.sl_basket)}` + (nx.ok ? '' : ' (menunggu ruang SL)'));
+  if (k.trailing) b.push(`Trailing: ${k.trailing}`);
+  if (ps.kena_sl) b.push('Harga sudah menyentuh SL: posisi strategi selesai begitu candle ini tutup.');
+  b.push('Belum punya posisi ini? Jangan kejar harga — tunggu sinyal berikutnya.');
   return b.join('\n');
 }
 
@@ -3393,6 +3442,22 @@ function rekapTerbaru(sym) {
 
 // ================================================================== analisis tertulis (narasi.py) — deterministik, tanpa angka karangan
 const MODE_NAMA = { scalp: 'scalping', swing: 'swing' };
+/** Kalimat untuk posisi strategi yang SUDAH berjalan: bukan entry baru; SL trailing bisa sudah melewati entry (narasi.posisi_berjalan). */
+function narasiPosisi(mode, rc, dp = 2) {
+  const ps = rc.posisi, d = rc.arah || 0, terisi = (rc.layer || []).filter(L => L.jenis === 'Terisi');
+  const sejak = wib(ps.sejak, '%d/%m') === wib(now(), '%d/%m') ? wib(ps.sejak) : wib(ps.sejak, '%d/%m %H:%M');   // posisi swing bisa berhari-hari
+  const out = [`Rencana ${MODE_NAMA[mode]} (${rc.nama}, grade ${rc.grade}): posisi ${rc.aksi} sudah berjalan sejak ${sejak} WIB — bukan sinyal entry baru. ` +
+    `${ps.terisi} layer terisi (${terisi.map(L => `L${L.ke} ${fmt(L.harga, dp)}`).join(', ')}), rata-rata ${fmt(ps.avg, dp)}; basket sekarang ${fr(ps.r_kini)} setelah biaya.`];
+  const sisi = d < 0 ? 'di atas' : 'di bawah', lewat = ps.terisi === 1 ? 'entry' : `harga rata-rata ${fmt(ps.avg, dp)}`;
+  if (ps.kena_sl) out.push(`Harga sudah menyentuh SL ${fmt(rc.sl, dp)}: posisi strategi selesai begitu candle ini tutup (hasil sekitar ${fr(ps.r_sl)}).`);
+  else if (ps.sl_geser) out.push(`SL awal ${fmt(ps.sl_awal, dp)} (1R ${fmt(rc.r0, dp)}) sudah digeser trailing ke ${fmt(rc.sl, dp)} — tetap ${sisi} harga sekarang` +
+    (ps.kunci ? `, dan sudah melewati ${lewat} sehingga bila kena basket tetap untung ${fr(ps.r_sl)}.` : `; bila kena hasil basket ${fr(ps.r_sl)}.`));
+  else out.push(`SL masih di posisi awal ${fmt(rc.sl, dp)} (${sisi} harga); bila kena hasil basket ${fr(ps.r_sl)}.`);
+  const b = ps.berikut;
+  if (b) out.push(`Layer berikutnya L${b.ke}: ${b.jenis.toLowerCase()} ${fmt(b.harga, dp)}, lalu SL semua layer ${fmt(b.sl_basket, dp)}${b.ok ? '' : ' (menunggu ruang SL)'}.`);
+  out.push('Yang belum punya posisi ini: jangan kejar harga, tunggu sinyal berikutnya.');
+  return out;
+}
 function susunNarasi(sym, mode, st) {
   const dp = 2, px = st.harga, kb = st.kebiasaan || {}, rz = kb.rezim || {}, rc = (st.rencana || {}).utama, out = [];
   let head = `${sym} ${fmt(px, dp)}`;
@@ -3410,14 +3475,17 @@ function susunNarasi(sym, mode, st) {
   if (rc) {
     if (rc.aksi === 'TUNGGU') out.push(`Rencana ${MODE_NAMA[mode]}: TUNGGU — ${rc.pemicu || ''}. ` + (rc.alasan || []).slice(0, 2).join(' '));
     else {
-      const lot = (rc.lot || {}).lot;
-      let s = `Rencana ${MODE_NAMA[mode]} (${rc.nama}, grade ${rc.grade}, keyakinan ${(rc.yakin || '-').toLowerCase()}): ${rc.aksi} ${rc.jenis_entry || ''} di ${fmt(rc.entry, dp)}, SL ${fmt(rc.sl, dp)}, ` +
-        `TP1 ${fmt(rc.tp[0], dp)} / TP2 ${fmt(rc.tp[1], dp)} / TP3 ${fmt(rc.tp[2], dp)}`;
-      if (lot) s += `, lot ${lot} per layer`;
-      out.push(s + '.');
-      if (rc.status === 'SIAP') out.push(`Pemicu: ${rc.pemicu}.`);
-      const lay = (rc.layer || []).slice(1);
-      if (lay.length) out.push('Layer piramida (ditambah hanya saat harga maju, total rugi terburuk tetap ±1R): ' + lay.map(L => `L${L.ke} ${fmt(L.harga, dp)}`).join('; ') + '.');
+      if (rc.status === 'AKTIF' && rc.posisi) out.push(...narasiPosisi(mode, rc, dp));
+      else {
+        const lot = (rc.lot || {}).lot;
+        let s = `Rencana ${MODE_NAMA[mode]} (${rc.nama}, grade ${rc.grade}, keyakinan ${(rc.yakin || '-').toLowerCase()}): ${rc.aksi} ${rc.jenis_entry || ''} di ${fmt(rc.entry, dp)}, SL ${fmt(rc.sl, dp)}, ` +
+          `TP1 ${fmt(rc.tp[0], dp)} / TP2 ${fmt(rc.tp[1], dp)} / TP3 ${fmt(rc.tp[2], dp)}`;
+        if (lot) s += `, lot ${lot} per layer`;
+        out.push(s + '.');
+        if (rc.status === 'SIAP') out.push(`Pemicu: ${rc.pemicu}.`);
+        const lay = (rc.layer || []).slice(1);
+        if (lay.length) out.push('Layer piramida (ditambah hanya saat harga maju, total rugi terburuk tetap ±1R): ' + lay.map(L => `L${L.ke} ${fmt(L.harga, dp)}`).join('; ') + '.');
+      }
       const stt = rc.statistik || {}, tp = stt.tp_peluang || {};
       if (stt.pf) {
         let s2 = `Uji balik (${stt.sumber}): PF ${fmt(stt.pf)}`;
@@ -3468,7 +3536,7 @@ function susunNarasi(sym, mode, st) {
 // price action 2 dtk; memori belajar 3 dtk; rekap jam/sesi/harian; jurnal 1 mnt; kebiasaan 2 mnt; prediksi tiap candle
 // 15m/1h tutup atau 5 mnt; lab otonom dan uji walk-forward harian / saat diminta. Segarkan = bangunkan semua loop,
 // berurutan feed → memori → rencana. Hanya membaca pasar — tidak pernah mengirim order.
-const VERSI_WEB = 'a91b5e7ac1a9';
+const VERSI_WEB = '5c1434509e2c';
 const JEDA_LOOP = { feed: 1.0, hitung: 2.0, berkala: 5.0, belajar: 3.0 };
 
 class Putaran {
@@ -3915,7 +3983,7 @@ class Mesin {
       const h = this.feed.harga[sym] || {}, o = { harga: h.p ?? null, chg24: this.perubahan24j(sym), sumber: h.sumber ?? null, mode: {} };
       for (const mode of MODES) {
         const c = this.cache.get(sym + '|' + mode) || {}, u = (c.rencana || {}).utama || {}, m = {};
-        for (const k of ['aksi', 'status', 'entry', 'sl', 'nama', 'yakin', 'grade', 'jenis_entry']) m[k] = u[k] ?? null;
+        for (const k of ['aksi', 'status', 'entry', 'sl', 'nama', 'yakin', 'grade', 'jenis_entry', 'posisi']) m[k] = u[k] ?? null;
         m.tp = u.tp || null;
         const s = c.pa || {}; m.pa = {};
         for (const k of ['aksi', 'status', 'nama', 'tf', 'entry', 'sl', 'tp', 'tp_p', 'yakin', 'e_kal']) m.pa[k] = s[k] ?? null;

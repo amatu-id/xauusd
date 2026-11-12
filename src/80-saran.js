@@ -441,6 +441,22 @@ function rekapTerbaru(sym) {
 
 // ================================================================== analisis tertulis (narasi.py) — deterministik, tanpa angka karangan
 const MODE_NAMA = { scalp: 'scalping', swing: 'swing' };
+/** Kalimat untuk posisi strategi yang SUDAH berjalan: bukan entry baru; SL trailing bisa sudah melewati entry (narasi.posisi_berjalan). */
+function narasiPosisi(mode, rc, dp = 2) {
+  const ps = rc.posisi, d = rc.arah || 0, terisi = (rc.layer || []).filter(L => L.jenis === 'Terisi');
+  const sejak = wib(ps.sejak, '%d/%m') === wib(now(), '%d/%m') ? wib(ps.sejak) : wib(ps.sejak, '%d/%m %H:%M');   // posisi swing bisa berhari-hari
+  const out = [`Rencana ${MODE_NAMA[mode]} (${rc.nama}, grade ${rc.grade}): posisi ${rc.aksi} sudah berjalan sejak ${sejak} WIB — bukan sinyal entry baru. ` +
+    `${ps.terisi} layer terisi (${terisi.map(L => `L${L.ke} ${fmt(L.harga, dp)}`).join(', ')}), rata-rata ${fmt(ps.avg, dp)}; basket sekarang ${fr(ps.r_kini)} setelah biaya.`];
+  const sisi = d < 0 ? 'di atas' : 'di bawah', lewat = ps.terisi === 1 ? 'entry' : `harga rata-rata ${fmt(ps.avg, dp)}`;
+  if (ps.kena_sl) out.push(`Harga sudah menyentuh SL ${fmt(rc.sl, dp)}: posisi strategi selesai begitu candle ini tutup (hasil sekitar ${fr(ps.r_sl)}).`);
+  else if (ps.sl_geser) out.push(`SL awal ${fmt(ps.sl_awal, dp)} (1R ${fmt(rc.r0, dp)}) sudah digeser trailing ke ${fmt(rc.sl, dp)} — tetap ${sisi} harga sekarang` +
+    (ps.kunci ? `, dan sudah melewati ${lewat} sehingga bila kena basket tetap untung ${fr(ps.r_sl)}.` : `; bila kena hasil basket ${fr(ps.r_sl)}.`));
+  else out.push(`SL masih di posisi awal ${fmt(rc.sl, dp)} (${sisi} harga); bila kena hasil basket ${fr(ps.r_sl)}.`);
+  const b = ps.berikut;
+  if (b) out.push(`Layer berikutnya L${b.ke}: ${b.jenis.toLowerCase()} ${fmt(b.harga, dp)}, lalu SL semua layer ${fmt(b.sl_basket, dp)}${b.ok ? '' : ' (menunggu ruang SL)'}.`);
+  out.push('Yang belum punya posisi ini: jangan kejar harga, tunggu sinyal berikutnya.');
+  return out;
+}
 function susunNarasi(sym, mode, st) {
   const dp = 2, px = st.harga, kb = st.kebiasaan || {}, rz = kb.rezim || {}, rc = (st.rencana || {}).utama, out = [];
   let head = `${sym} ${fmt(px, dp)}`;
@@ -458,14 +474,17 @@ function susunNarasi(sym, mode, st) {
   if (rc) {
     if (rc.aksi === 'TUNGGU') out.push(`Rencana ${MODE_NAMA[mode]}: TUNGGU — ${rc.pemicu || ''}. ` + (rc.alasan || []).slice(0, 2).join(' '));
     else {
-      const lot = (rc.lot || {}).lot;
-      let s = `Rencana ${MODE_NAMA[mode]} (${rc.nama}, grade ${rc.grade}, keyakinan ${(rc.yakin || '-').toLowerCase()}): ${rc.aksi} ${rc.jenis_entry || ''} di ${fmt(rc.entry, dp)}, SL ${fmt(rc.sl, dp)}, ` +
-        `TP1 ${fmt(rc.tp[0], dp)} / TP2 ${fmt(rc.tp[1], dp)} / TP3 ${fmt(rc.tp[2], dp)}`;
-      if (lot) s += `, lot ${lot} per layer`;
-      out.push(s + '.');
-      if (rc.status === 'SIAP') out.push(`Pemicu: ${rc.pemicu}.`);
-      const lay = (rc.layer || []).slice(1);
-      if (lay.length) out.push('Layer piramida (ditambah hanya saat harga maju, total rugi terburuk tetap ±1R): ' + lay.map(L => `L${L.ke} ${fmt(L.harga, dp)}`).join('; ') + '.');
+      if (rc.status === 'AKTIF' && rc.posisi) out.push(...narasiPosisi(mode, rc, dp));
+      else {
+        const lot = (rc.lot || {}).lot;
+        let s = `Rencana ${MODE_NAMA[mode]} (${rc.nama}, grade ${rc.grade}, keyakinan ${(rc.yakin || '-').toLowerCase()}): ${rc.aksi} ${rc.jenis_entry || ''} di ${fmt(rc.entry, dp)}, SL ${fmt(rc.sl, dp)}, ` +
+          `TP1 ${fmt(rc.tp[0], dp)} / TP2 ${fmt(rc.tp[1], dp)} / TP3 ${fmt(rc.tp[2], dp)}`;
+        if (lot) s += `, lot ${lot} per layer`;
+        out.push(s + '.');
+        if (rc.status === 'SIAP') out.push(`Pemicu: ${rc.pemicu}.`);
+        const lay = (rc.layer || []).slice(1);
+        if (lay.length) out.push('Layer piramida (ditambah hanya saat harga maju, total rugi terburuk tetap ±1R): ' + lay.map(L => `L${L.ke} ${fmt(L.harga, dp)}`).join('; ') + '.');
+      }
       const stt = rc.statistik || {}, tp = stt.tp_peluang || {};
       if (stt.pf) {
         let s2 = `Uji balik (${stt.sumber}): PF ${fmt(stt.pf)}`;

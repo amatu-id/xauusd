@@ -450,7 +450,7 @@ class Mesin {
       const h = this.feed.harga[sym] || {}, o = { harga: h.p ?? null, chg24: this.perubahan24j(sym), sumber: h.sumber ?? null, mode: {} };
       for (const mode of MODES) {
         const c = this.cache.get(sym + '|' + mode) || {}, u = (c.rencana || {}).utama || {}, m = {};
-        for (const k of ['aksi', 'status', 'entry', 'sl', 'nama', 'yakin', 'grade', 'jenis_entry']) m[k] = u[k] ?? null;
+        for (const k of ['aksi', 'status', 'entry', 'sl', 'nama', 'yakin', 'grade', 'jenis_entry', 'posisi']) m[k] = u[k] ?? null;
         m.tp = u.tp || null;
         const s = c.pa || {}; m.pa = {};
         for (const k of ['aksi', 'status', 'nama', 'tf', 'entry', 'sl', 'tp', 'tp_p', 'yakin', 'e_kal']) m.pa[k] = s[k] ?? null;

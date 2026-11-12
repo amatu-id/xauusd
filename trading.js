@@ -25,9 +25,12 @@ const sR = (x, dp = 2) => (x == null || !isFinite(x)) ? '-' : (x > 0 ? '+' : '')
 const sgn = x => (x > 0 ? '+' : '');
 const wib = (t, opt = { hour: '2-digit', minute: '2-digit' }) => t ? new Date(t).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', ...opt }) : '-';
 const tgl = t => wib(t, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const sejak = t => (wib(t, { day: '2-digit', month: '2-digit' }) === wib(Date.now(), { day: '2-digit', month: '2-digit' }) ? wib(t) : tgl(t));   // + tanggal bila bukan hari ini
 const dpOf = () => S.st?.cfg?.dp ?? 2;
 const kls = a => a === 'BUY' ? 'up' : a === 'SELL' ? 'dn' : 'wt';
 const isAksi = a => a === 'BUY' || a === 'SELL';
+/** Label status rencana: posisi yang sudah berjalan = "SELL berjalan" (bukan entry baru), selain itu "SELL SIAP" dst. */
+const labelRencana = (aksi, status) => !aksi ? '' : aksi === 'TUNGGU' ? 'TUNGGU' : status === 'AKTIF' ? aksi + ' berjalan' : aksi + (status ? ' ' + status : '');
 const TFL = tf => String(tf || '').toUpperCase();
 
 /* Jembatan ke mesin (Web Worker). api('/api/state?sym=..&mode=..', {method, body}) sama seperti daemon AI Yulius. */
@@ -84,7 +87,7 @@ function renderPairs() {
     const m = (d.mode || {})[S.mode] || {}, pa = m.pa || {};
     const g = $('[data-sig]', b);
     if (isAksi(pa.aksi)) { g.textContent = 'PA ' + pa.aksi; g.className = 'ps ' + kls(pa.aksi); }
-    else { g.textContent = m.aksi ? (m.aksi === 'TUNGGU' ? 'TUNGGU' : m.aksi + ' ' + (m.status || '')) : ''; g.className = 'ps ' + kls(m.aksi); }
+    else { g.textContent = labelRencana(m.aksi, m.status); g.className = 'ps ' + kls(m.aksi); }
   });
   $$('#mode-seg button').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
 }
@@ -105,13 +108,22 @@ function renderFeeds(st) {
 function renderKeputusan(st) {
   const k = st.rencana?.utama || {}, p = st.pa || {}, pr = (st.prediksi || [])[0], el = $('#keputusan');
   const pa = p.aksi, pl = k.aksi, dp = dpOf();
+  // posisi strategi yang sudah berjalan BUKAN entry baru: entry lamanya sudah lewat dan SL trailing-nya bisa sudah melewati entry
+  const ps = k.status === 'AKTIF' && isAksi(pl) ? (k.posisi || {}) : null, plBaru = ps ? null : pl;
   let aksi = 'TUNGGU', kelas = 'wait', judul = 'Belum ada setup yang lolos', sub = [];
-  if (isAksi(pa) && isAksi(pl) && pa === pl) { aksi = pa; kelas = pa === 'BUY' ? 'buy' : 'sell'; judul = `${pa} · price action dan strategi sepakat`; }
-  else if (isAksi(pa) && isAksi(pl)) { aksi = 'HATI-HATI'; kelas = 'warn'; judul = `Price action ${pa} berlawanan dengan strategi ${pl}`; }
-  else if (isAksi(pa)) { aksi = pa; kelas = pa === 'BUY' ? 'buy' : 'sell'; judul = `${pa} dari ${p.nama} ${TFL(p.tf)} · ${p.jenis_entry || ''} ${fmt(p.entry, dp)}`; }
-  else if (isAksi(pl)) { aksi = pl; kelas = pl === 'BUY' ? 'buy' : 'sell'; judul = `${pl} dari strategi · ${k.jenis_entry || ''} ${k.entry != null ? fmt(k.entry, dp) : ''}`; }
+  if (isAksi(pa) && isAksi(plBaru) && pa === plBaru) { aksi = pa; kelas = pa === 'BUY' ? 'buy' : 'sell'; judul = `${pa} · price action dan strategi sepakat`; }
+  else if (isAksi(pa) && isAksi(plBaru)) { aksi = 'HATI-HATI'; kelas = 'warn'; judul = `Price action ${pa} berlawanan dengan strategi ${plBaru}`; }
+  else if (isAksi(pa) && ps && pa !== pl) { aksi = 'HATI-HATI'; kelas = 'warn'; judul = `Price action ${pa} berlawanan dengan posisi ${pl} strategi yang sedang berjalan`; }
+  else if (isAksi(pa)) { aksi = pa; kelas = pa === 'BUY' ? 'buy' : 'sell'; judul = `${pa} dari ${p.nama} ${TFL(p.tf)} · ${p.jenis_entry || ''} ${fmt(p.entry, dp)}${ps ? ' · searah posisi strategi' : ''}`; }
+  else if (isAksi(plBaru)) { aksi = plBaru; kelas = plBaru === 'BUY' ? 'buy' : 'sell'; judul = `${plBaru} dari strategi · ${k.jenis_entry || ''} ${k.entry != null ? fmt(k.entry, dp) : ''}`; }
+  else if (ps) {
+    aksi = 'BERJALAN'; kelas = 'jalan';
+    judul = ps.kena_sl ? `Posisi ${pl} strategi menyentuh SL ${fmt(k.sl, dp)} · bukan entry baru` : `Posisi ${pl} strategi berjalan sejak ${sejak(ps.sejak || k.t_sinyal)} WIB · bukan entry baru`;
+  }
   else if (!st.siap) judul = 'Menyiapkan data riwayat…';
-  sub.push(`Strategi: ${pl ? pl + (pl !== 'TUNGGU' ? ' ' + (k.status || '') : '') : '-'}`);
+  if (ps) sub.push(`Strategi: ${pl} berjalan, ${ps.terisi || 1} layer, SL ${ps.sl_geser ? 'trailing ' : ''}${fmt(k.sl, dp)}` +
+    (ps.r_sl != null ? (ps.kunci ? ' kunci ' : ' bila kena ') + sR(ps.r_sl) : '') + ' · belum ikut: jangan kejar');
+  else sub.push(`Strategi: ${pl ? labelRencana(pl, k.status) : '-'}`);
   sub.push(`Price action: ${pa || '-'}`);
   if (pr) sub.push(`Prediksi ${pr.label}: ${pr.p_naik >= 50 ? 'naik' : 'turun'} ${fmt(Math.max(pr.p_naik, 100 - pr.p_naik), 0)}%`);
   el.className = 'panel keputusan ' + kelas;
@@ -198,17 +210,31 @@ function renderRencana(st) {
   if (!k) { $('#rc-body').innerHTML = `<div class="kosong">${st.siap ? 'Menghitung rencana…' : (st.riwayat ? `Mengunduh ${esc(st.riwayat.sym)} ${esc(st.riwayat.tf)}…` : 'Menyiapkan data riwayat…')}</div>`; return; }
   $('#rc-sub').textContent = `${k.nama} · ${TFL(k.tf)}`;
   $('#rc-chips').innerHTML = `<span class="chip st-${esc(k.status)}" data-tip="rc_status">${esc(k.status)}</span> <span class="chip g-${esc(k.grade)}" data-tip="rc_grade">Grade ${esc(k.grade || '-')} · ${esc(k.yakin || '')}</span>`;
-  let h = `<div class="sig-h" data-tip="rc_sig"><span class="badge ${esc(k.aksi)}">${esc(k.aksi)}</span><div class="t"><b>${k.aksi === 'TUNGGU' ? 'Belum ada entry' : esc((k.jenis_entry || '') + (k.entry != null ? ' ' + fmt(k.entry, dp) : ''))}</b>
+  const ps = k.status === 'AKTIF' && k.aksi !== 'TUNGGU' ? k.posisi : null;
+  let h;
+  if (ps) h = `<div class="sig-h" data-tip="rc_sig"><span class="badge ${esc(k.aksi)}">${esc(k.aksi)}</span><div class="t"><b>Posisi berjalan sejak ${sejak(ps.sejak)} WIB · ${ps.terisi} layer terisi</b>
+    <small>Bukan entry baru — yang belum ikut: tunggu sinyal berikutnya · basket <span class="${ps.r_kini > 0 ? 'up' : 'dn'}">${sR(ps.r_kini)}</span>${ps.uang_kini != null ? ` (${sgn(ps.uang_kini)}${fmt(ps.uang_kini, 0)} ${esc(ps.mata_uang || '')})` : ''}</small></div></div>`;
+  else h = `<div class="sig-h" data-tip="rc_sig"><span class="badge ${esc(k.aksi)}">${esc(k.aksi)}</span><div class="t"><b>${k.aksi === 'TUNGGU' ? 'Belum ada entry' : esc((k.jenis_entry || '') + (k.entry != null ? ' ' + fmt(k.entry, dp) : ''))}</b>
     <small>${esc(k.pemicu || '')}${k.berlaku ? ' · ' + esc(k.berlaku) : ''}${k.status === 'AKTIF' && k.maju_r != null ? ` · posisi ${sR(k.maju_r)}` : ''}</small></div></div>`;
-  if (k.entry != null && k.aksi !== 'TUNGGU') {
+  if (ps && k.entry != null) {
+    const tp = k.tp || [], pel = (k.statistik || {}).tp_peluang || {}, kena = i => ps.terbaik != null && tp[i] != null && (ps.terbaik - tp[i]) * k.arah >= 0;
+    const catSL = ps.kena_sl ? '<i class="dn">sudah tersentuh</i>' : ps.kunci ? `<i class="up">kunci ${sR(ps.r_sl)}</i>` : `bila kena ${sR(ps.r_sl)}`;
+    h += `<div class="lv lima">${lvBox('e', 'Entry L1', k.entry, px, ps.terisi > 1 ? `rata² ${fmt(ps.avg, dp)}` : `terisi ${sejak(ps.sejak)}`, null, 'rc:e')}${lvBox('s', ps.sl_geser ? 'SL trailing' : 'SL', k.sl, px, catSL, null, 'rc:s')}
+      ${[0, 1, 2].map(i => lvBox(kena(i) ? 't lewat' : 't', `TP${i + 1}`, tp[i], px, kena(i) ? 'sudah tersentuh' : pel[(i + 1) + 'R'] != null ? `peluang ${pct(pel[(i + 1) + 'R'])}` : '', null, 'rc:t' + i)).join('')}</div>`;
+  } else if (k.entry != null && k.aksi !== 'TUNGGU') {
     const tp = k.tp || [], pel = (k.statistik || {}).tp_peluang || {};
     h += `<div class="lv lima">${lvBox('e', 'Entry', k.entry, px, '', null, 'rc:e')}${lvBox('s', 'SL', k.sl, px, k.r0 ? `1R ${fmt(k.r0, dp)}` : '', null, 'rc:s')}
       ${[0, 1, 2].map(i => lvBox('t', `TP${i + 1}`, tp[i], px, pel[(i + 1) + 'R'] != null ? `peluang ${pct(pel[(i + 1) + 'R'])}` : '', null, 'rc:t' + i)).join('')}</div>`;
   } else if (k.range) h += `<div class="mini" data-tip="rc_range">Range sesi <b>${fmt(k.range[0], dp)} - ${fmt(k.range[1], dp)}</b></div>`;
-  const L = (k.layer || []).slice(1);
-  if (L.length) h += `<div class="mini" data-tip="rc_layer">Layer: ${L.map(x => `L${x.ke} <b>${fmt(x.harga, dp)}</b>`).join(' · ')}</div>`;
+  const L = ps ? (k.layer || []) : (k.layer || []).slice(1);
+  if (ps && L.length) h += `<div class="mini" data-tip="rc_layer">Layer: ${L.map(x => x.jenis === 'Terisi' ? `L${x.ke} <b>${fmt(x.harga, dp)}</b> <span class="up">terisi</span>`
+    : `L${x.ke} <b>${fmt(x.harga, dp)}</b> ${x.jenis === 'Tambah berikutnya' ? esc(((ps.berikut || {}).jenis || 'berikutnya').toLowerCase()) : 'menunggu ruang SL'}${x.sl_basket != null ? ` → SL ${fmt(x.sl_basket, dp)}` : ''}`).join(' · ')}</div>`;
+  else if (L.length) h += `<div class="mini" data-tip="rc_layer">Layer: ${L.map(x => `L${x.ke} <b>${fmt(x.harga, dp)}</b>`).join(' · ')}</div>`;
   const lt = k.lot;
-  if (lt) h += `<div class="mini" data-tip="lot" data-a="rc">Lot <b>${lt.lot}</b>/layer · risiko ${fmt(lt.risiko, 0)} ${esc(lt.mata_uang)} (${fmt(lt.risiko_pct, 2)}%) · rugi SL <b>${fmt(lt.rugi_sl, 0)}</b>${k.trailing ? ' · ' + esc(k.trailing) : ''}</div>`;
+  if (lt && ps) h += `<div class="mini" data-tip="lot" data-a="rc">Lot <b>${lt.lot}</b>/layer × ${ps.terisi} terisi · bila SL kena <b class="${ps.r_sl > 0 ? 'up' : 'dn'}">${ps.uang_sl != null ? sgn(ps.uang_sl) + fmt(ps.uang_sl, 0) + ' ' + esc(lt.mata_uang) : sR(ps.r_sl)}</b> (${sR(ps.r_sl)})${k.trailing ? ' · ' + esc(k.trailing) : ''}</div>`;
+  else if (lt) h += `<div class="mini" data-tip="lot" data-a="rc">Lot <b>${lt.lot}</b>/layer · risiko ${fmt(lt.risiko, 0)} ${esc(lt.mata_uang)} (${fmt(lt.risiko_pct, 2)}%) · rugi SL <b>${fmt(lt.rugi_sl, 0)}</b>${k.trailing ? ' · ' + esc(k.trailing) : ''}</div>`;
+  if (ps && ps.sl_geser && ps.sl_awal != null) h += `<div class="mini" data-tip="rc_slgeser">SL awal <b>${fmt(ps.sl_awal, dp)}</b> (${k.arah < 0 ? 'di atas' : 'di bawah'} entry, 1R ${fmt(k.r0, dp)}) sudah digeser trailing ke <b>${fmt(k.sl, dp)}</b>: tetap ${k.arah < 0 ? 'di atas' : 'di bawah'} harga` +
+    (ps.kunci ? `, <span class="up">melewati ${ps.terisi > 1 ? 'harga rata-rata' : 'entry'} → untung terkunci</span>.` : '.') + '</div>';
   if (lt && lt.catatan) h += `<div class="mini warn-txt" ${tipTeks('Catatan lot', lt.catatan)}>${esc(lt.catatan)}</div>`;
   if (st.konflik) h += `<div class="mini warn-txt" ${tipTeks('Konflik sinyal', st.konflik)}>${esc(st.konflik)}</div>`;
   if (st.offset_exness != null && k.entry != null) h += `<div class="mini" data-tip="rc_offset">Harga Exness BTCUSDm ${sgn(st.offset_exness)}${fmt(st.offset_exness, 2)} dari Binance: geser level sebesar itu.</div>`;
@@ -352,8 +378,10 @@ function drawPeta(C, st) {
       ket: `Target ${fmt((p.tp_k || [])[i], 2)}R · peluang ${pct(((p.tp_p || [])[i] || 0) * 100)}` }));
   }
   if (k && k.entry != null && k.aksi !== 'TUNGGU') {
-    lv.push({ v: k.entry, c: col('--entry'), t: 'Str E', w: 1, d: [2, 3], dim: true, nm: 'Entry rencana strategi', ket: `${k.nama || ''} · ${k.jenis_entry || ''}` });
-    lv.push({ v: k.sl, c: col('--sl'), t: 'Str SL', w: 1, d: [2, 3], dim: true, nm: 'Stop loss rencana strategi', ket: `${k.nama || ''}${k.r0 ? ` · 1R = ${fmt(k.r0, dp)}` : ''}` });
+    const ps = k.status === 'AKTIF' ? k.posisi : null;
+    lv.push({ v: k.entry, c: col('--entry'), t: ps ? 'Str L1' : 'Str E', w: 1, d: [2, 3], dim: true, nm: ps ? `Entry L1 posisi strategi yang berjalan sejak ${sejak(ps.sejak)} WIB (bukan entry baru)` : 'Entry rencana strategi', ket: `${k.nama || ''} · ${k.jenis_entry || ''}` });
+    lv.push({ v: k.sl, c: col('--sl'), t: ps && ps.sl_geser ? 'Str TSL' : 'Str SL', w: 1, d: [2, 3], dim: true, nm: ps && ps.sl_geser ? 'Stop loss trailing posisi strategi (semua layer)' : 'Stop loss rencana strategi',
+      ket: `${k.nama || ''}${ps ? ` · bila kena ${sR(ps.r_sl)}` : k.r0 ? ` · 1R = ${fmt(k.r0, dp)}` : ''}` });
   }
   let lo = Math.min(...C.l), hi = Math.max(...C.h);
   const pxNow = st.harga || C.c[n - 1];
@@ -506,7 +534,7 @@ function modalLevel() {
 function modalAlt() {
   const rc = S.st?.rencana || {}, alt = (rc.calon || []).slice(1), dp = dpOf();
   buka('Strategi lain untuk mode ini', `<div class="alt">${alt.map(a => `<div class="ai"><b class="${kls(a.aksi)}">${esc(a.aksi)}</b>
-    <span class="sp">${esc(a.nama)} <span class="muted">· ${esc(a.status)} · grade ${esc(a.grade)}</span><br><span class="muted">${esc(a.pemicu || '')}</span></span>
+    <span class="sp">${esc(a.nama)} <span class="muted">· ${esc(a.status === 'AKTIF' ? 'berjalan, bukan entry baru' : a.status)} · grade ${esc(a.grade)}</span><br><span class="muted">${esc(a.pemicu || '')}</span></span>
     <span class="num">${a.entry != null ? fmt(a.entry, dp) : ''}${a.sl != null ? `<br><span class="dn">SL ${fmt(a.sl, dp)}</span>` : ''}</span></div>`).join('') || '<div class="kosong">Tidak ada strategi lain.</div>'}</div>`);
 }
 
@@ -527,7 +555,7 @@ const VAL_ST = {
 const RC_ST = {
   SIAP: 'Setup sudah terbentuk: pasang order di harga entry sesuai jenis entry-nya.',
   MASUK: 'Pemicu baru saja terjadi: masuk sekarang di harga pasar.',
-  AKTIF: 'Posisi dari sinyal sebelumnya masih berjalan; SL dan TP mengikuti rencana.',
+  AKTIF: 'Posisi dari sinyal sebelumnya masih berjalan — bukan entry baru. Yang sudah ikut: kelola dengan SL semua layer dan layer berikutnya di kartu ini (SL trailing bisa sudah melewati entry = untung terkunci). Yang belum ikut: jangan kejar, tunggu sinyal berikutnya.',
   TUNGGU: 'Belum ada pemicu; rencana menunggu syaratnya terpenuhi.',
 };
 const LAB_ST = {
@@ -547,7 +575,7 @@ const KET = {
     const d = (S.rk || {})[sym] || {}, m = (d.mode || {})[S.mode] || {}, pa = m.pa || {}, u = m.ketidakpastian || {};
     return { j: `${esc(sym)} · ${sym === 'XAUUSDm' ? 'Emas (Exness)' : 'Bitcoin'}`, t: sym === S.sym ? 'Simbol yang sedang ditampilkan.' : 'Klik untuk menampilkan simbol ini.',
       kv: [['Harga terakhir', fmt(d.harga, 2)], ['Perubahan 24 jam', d.chg24 == null ? '-' : sgn(d.chg24) + fmt(d.chg24, 2) + '%', d.chg24 > 0 ? 'up' : d.chg24 < 0 ? 'dn' : ''],
-        ['Price action', esc(pa.aksi || '-'), isAksi(pa.aksi) ? kls(pa.aksi) : ''], ['Strategi', esc(m.aksi ? m.aksi + (m.aksi !== 'TUNGGU' && m.status ? ' ' + m.status : '') : '-'), isAksi(m.aksi) ? kls(m.aksi) : ''],
+        ['Price action', esc(pa.aksi || '-'), isAksi(pa.aksi) ? kls(pa.aksi) : ''], ['Strategi', esc(labelRencana(m.aksi, m.status) || '-'), isAksi(m.aksi) ? kls(m.aksi) : ''],
         u.label ? ['Ketidakpastian', `${esc(u.label)} ${fmt(u.skor, 0)}`] : null],
       c: `Label kecil kanan bawah = sinyal mode ${S.mode === 'scalp' ? 'Scalping' : 'Swing'}: "PA BUY/SELL" dari price action, selain itu status rencana strategi.` };
   },
@@ -608,9 +636,9 @@ const KET = {
   // ---- kolom 2: keputusan ----
   kp: (el, a, st) => {
     const k = st.rencana?.utama || {}, p = st.pa || {}, pr = (st.prediksi || [])[0];
-    return { j: 'Keputusan gabungan', t: 'Menggabungkan sinyal price action (memori belajar) dan rencana strategi (lab). BUY/SELL = ada setup; HATI-HATI = keduanya berlawanan arah; TUNGGU = belum ada setup yang lolos.',
+    return { j: 'Keputusan gabungan', t: 'Menggabungkan sinyal price action (memori belajar) dan rencana strategi (lab). BUY/SELL = ada setup baru; BERJALAN = posisi strategi dari sinyal sebelumnya masih berjalan (bukan entry baru: yang belum ikut menunggu sinyal berikutnya); HATI-HATI = keduanya berlawanan arah; TUNGGU = belum ada setup yang lolos.',
       kv: [['Price action', esc(p.aksi || '-') + (p.nama && isAksi(p.aksi) ? ` · ${esc(p.nama)} ${TFL(p.tf)}` : ''), isAksi(p.aksi) ? kls(p.aksi) : ''],
-        ['Strategi', esc(k.aksi || '-') + (k.aksi && k.aksi !== 'TUNGGU' && k.status ? ' ' + esc(k.status) : '') + (k.nama ? ` · ${esc(k.nama)}` : ''), isAksi(k.aksi) ? kls(k.aksi) : ''],
+        ['Strategi', esc(labelRencana(k.aksi, k.status) || '-') + (k.nama ? ` · ${esc(k.nama)}` : ''), isAksi(k.aksi) ? kls(k.aksi) : ''],
         pr ? [`Prediksi ${esc(pr.label)}`, `${pr.p_naik >= 50 ? 'naik' : 'turun'} ${fmt(Math.max(pr.p_naik, 100 - pr.p_naik), 0)}%`] : null],
       c: 'Perhitungan statistik dari data, bukan kepastian. AI Yulius tidak mengirim order.' };
   },
@@ -652,9 +680,24 @@ const KET = {
     kv: [['Skor mutu', fmt(st.pa?.mutu, 0)]], c: 'Tinggi minimal 70, Sedang minimal 55, di bawahnya Rendah.' }),
   lv: (el, a, st) => {
     const [src, k] = String(a).split(':'), dp = dpOf(), px = st.harga, pa = src === 'pa';
-    const p = pa ? (st.pa || {}) : (st.rencana?.utama || {}), R = pa ? p.r : p.r0;
+    const p = pa ? (st.pa || {}) : (st.rencana?.utama || {}), R = pa ? p.r : p.r0, ps = !pa && p.status === 'AKTIF' ? p.posisi : null;
     const jarak = v => (v != null && px ? `${sgn(v - px)}${fmt(v - px, dp)} (${sgn(v - px)}${fmt((v - px) / px * 100, 2)}%)` : '-');
     const rugi = p.lot ? ['Rugi jika kena', `${fmt(p.lot.rugi_sl, 0)} ${esc(p.lot.mata_uang || '')}`] : null;
+    if (k === 'e' && ps) return { j: 'Entry L1 (sudah terisi)', t: `Harga masuk layer pertama posisi strategi yang sudah berjalan sejak ${sejak(ps.sejak)} WIB. Bukan harga untuk entry baru: harga sudah bergerak ${fmt(Math.abs(px - p.entry), dp)} dari sini.`,
+      kv: [['Harga L1', fmt(p.entry, dp)], ['Layer terisi', String(ps.terisi)], ps.terisi > 1 ? ['Harga rata-rata', fmt(ps.avg, dp)] : null, ['Jarak dari harga', jarak(p.entry)],
+        ['Basket sekarang', sR(ps.r_kini), ps.r_kini > 0 ? 'up' : 'dn']] };
+    if (k === 's' && ps) {
+      const mu = esc(ps.mata_uang || ''), sisi = p.arah < 0 ? 'di atas' : 'di bawah';
+      return { j: ps.sl_geser ? 'Stop loss trailing' : 'Stop loss',
+        t: [`Untuk ${ARAH(p.arah)}, SL selalu ${sisi} harga sekarang. ` + (ps.sl_geser
+          ? `SL awal ${fmt(ps.sl_awal, dp)} (${sisi} entry, 1R ${fmt(R, dp)}) sudah digeser trailing mengikuti harga terbaik${ps.terbaik != null ? ' ' + fmt(ps.terbaik, dp) : ''}` +
+            (ps.kunci ? `, sampai melewati ${ps.terisi > 1 ? 'harga rata-rata basket' : 'entry'}: bila kena, posisi tetap untung.` : '.')
+          : 'SL masih di posisi awal rencana.'),
+          'Berlaku untuk semua layer yang sudah terisi. Bukan SL untuk entry baru: yang belum ikut menunggu sinyal berikutnya.'],
+        kv: [['Harga SL', fmt(p.sl, dp)], ps.sl_geser ? ['SL awal', fmt(ps.sl_awal, dp)] : null, ['1R (SL awal)', fmt(R, dp)], ['Jarak dari harga', jarak(p.sl)],
+          [ps.r_sl > 0 ? 'Untung jika kena' : 'Hasil jika kena', (ps.uang_sl != null ? `${sgn(ps.uang_sl)}${fmt(ps.uang_sl, 0)} ${mu} · ` : '') + sR(ps.r_sl), ps.r_sl > 0 ? 'up' : 'dn']],
+        c: `${ps.terisi} layer terisi, sudah termasuk biaya spread.` };
+    }
     if (k === 'e') return { j: 'Entry', t: `Harga masuk ${pa ? 'sinyal price action' : 'rencana strategi'} (${esc(p.jenis_entry || '-')}). Angka kecil di kanan atas kotak = jarak dari harga sekarang.`,
       kv: [['Harga', fmt(p.entry, dp)], ['Jarak dari harga', jarak(p.entry)]] };
     if (k === 's') return { j: 'Stop loss', t: pa ? 'Batas rugi, ditaruh di balik struktur pola. 1R = jarak entry ke SL; target dan hasil dihitung dalam kelipatan R.' : 'Batas rugi rencana strategi. 1R = jarak entry ke SL.',
@@ -666,8 +709,9 @@ const KET = {
       return { j: `TP${i + 1} · ${fmt(kk, 2)}R`, t: `Target ${fmt(kk, 2)}R dari entry. Peluang = persentase kejadian serupa di memori yang mencapai target ini sebelum kena SL (bar hijau di kotak).`,
         kv: [['Harga', fmt(tp, dp)], ['Jarak dari harga', jarak(tp)], ['Peluang', pct((pp || 0) * 100)]] }; }
     const pel = (p.statistik || {}).tp_peluang || {}, kr = tp != null && p.entry != null && R ? Math.abs(tp - p.entry) / R : null;
-    return { j: `TP${i + 1}${kr != null ? ` · ${fmt(kr, 2)}R` : ''}`, t: `Target ke-${i + 1} rencana strategi.`,
-      kv: [['Harga', fmt(tp, dp)], ['Jarak dari harga', jarak(tp)], [`Peluang capai ${i + 1}R (uji lab)`, pct(pel[(i + 1) + 'R'])]] };
+    const lewat = !!ps && ps.terbaik != null && tp != null && (ps.terbaik - tp) * p.arah >= 0;
+    return { j: `TP${i + 1}${kr != null ? ` · ${fmt(kr, 2)}R` : ''}`, t: `Target ke-${i + 1} rencana strategi.` + (lewat ? ` Harga terbaik sejak masuk (${fmt(ps.terbaik, dp)}) sudah menyentuh level ini.` : ''),
+      kv: [['Harga', fmt(tp, dp)], ['Jarak dari harga', jarak(tp)], ps ? ['Status', lewat ? 'sudah tersentuh' : 'belum tersentuh', lewat ? 'up' : ''] : null, [`Peluang capai ${i + 1}R (uji lab)`, pct(pel[(i + 1) + 'R'])]] };
   },
   pa_mem: (el, a, st) => ({ j: 'Memori serupa', t: 'Kejadian pola yang mirip (pola, arah, timeframe, konteks) di memori. "Maju" = yang terekam sejak perangkat ini mulai merekam (saat candle tutup), bukan dari riwayat. Makin banyak, makin bisa dipercaya.',
     kv: [['Serupa', fmt(st.pa?.n, 0)], ['Sampel efektif', fmt(st.pa?.n_eff, 0)], ['Maju', fmt(st.pa?.n_maju, 0)]] }),
@@ -678,7 +722,9 @@ const KET = {
     const p = src === 'pa' ? (st.pa || {}) : (st.rencana?.utama || {}), lt = p.lot || {}, s = st.setelan || {}, mu = esc(lt.mata_uang || s.mata_uang || '');
     return { j: `Lot ${esc(lt.lot ?? '-')}${src === 'rc' ? ' per layer' : ''}`, t: 'Dari Setelan: saldo x risiko% dibagi (jarak SL x ukuran kontrak).',
       kv: [['Saldo', `${fmt(s.saldo, 0)} ${esc(s.mata_uang || '')}`], ['Risiko per posisi', `${fmt(s.risiko_pct, 2)}%`], lt.risiko != null ? ['Nominal risiko', `${fmt(lt.risiko, 0)} ${mu}`] : null,
-        ['Rugi jika kena SL', `${fmt(lt.rugi_sl, 0)} ${mu}`]], c: lt.catatan ? esc(lt.catatan) : '' };
+        [src !== 'pa' && p.status === 'AKTIF' && p.posisi ? 'Rugi 1R per layer (SL awal)' : 'Rugi jika kena SL', `${fmt(lt.rugi_sl, 0)} ${mu}`],
+        src !== 'pa' && p.status === 'AKTIF' && p.posisi && p.posisi.uang_sl != null ? ['Hasil bila SL sekarang kena', `${sgn(p.posisi.uang_sl)}${fmt(p.posisi.uang_sl, 0)} ${mu}`, p.posisi.uang_sl > 0 ? 'up' : 'dn'] : null],
+      c: lt.catatan ? esc(lt.catatan) : '' };
   },
   pa_pengali: (el, a, st) => ({ j: `Risiko x${fmt(st.pa?.pengali, 2)}`, t: 'Lot sinyal ini dikecilkan karena ketidakpastian atau volatilitas sedang tinggi.' }),
   pantau: (el, i, st) => {
@@ -711,12 +757,21 @@ const KET = {
       t: 'Grade lab: A = profit factor minimal 1,35, semua segmen minimal 1,10, dan stabil di parameter tetangga; B = minimal 1,20 dan semua segmen minimal 1,00; selain itu C; D = tidak lulus. Turun satu tingkat bila drawdown Monte Carlo lebih dari 30R atau kalah beruntun minimal 14.',
       kv: [['Skor mutu', fmt(k.mutu, 0)]], c: 'Keyakinan dari skor mutu: Tinggi minimal 76, Sedang minimal 62, di bawahnya Rendah.' }; },
   rc_sig: (el, a, st) => { const k = st.rencana?.utama || {};
-    return { j: `${esc(k.aksi || '-')} · ${esc(k.nama || '')} ${TFL(k.tf)}`, t: k.aksi === 'TUNGGU' ? 'Belum ada entry dari strategi ini.' : `Jenis entry: ${esc(k.jenis_entry || '-')}.`,
-      kv: [['Pemicu', esc(k.pemicu || '-')], k.berlaku ? ['Berlaku', esc(k.berlaku)] : null, k.status === 'AKTIF' && k.maju_r != null ? ['Posisi sekarang', sR(k.maju_r), k.maju_r > 0 ? 'up' : 'dn'] : null,
+    const ps = k.status === 'AKTIF' ? k.posisi : null;
+    return { j: `${esc(k.aksi || '-')} · ${esc(k.nama || '')} ${TFL(k.tf)}`, t: k.aksi === 'TUNGGU' ? 'Belum ada entry dari strategi ini.'
+      : ps ? 'Posisi strategi dari sinyal sebelumnya masih berjalan — bukan entry baru. Yang belum ikut: tunggu sinyal berikutnya.' : `Jenis entry: ${esc(k.jenis_entry || '-')}.`,
+      kv: [['Pemicu', esc(k.pemicu || '-')], k.berlaku ? ['Berlaku', esc(k.berlaku)] : null,
+        ps ? ['Basket sekarang', `${sR(ps.r_kini)} (${ps.terisi} layer)`, ps.r_kini > 0 ? 'up' : 'dn'] : k.status === 'AKTIF' && k.maju_r != null ? ['Posisi sekarang', sR(k.maju_r), k.maju_r > 0 ? 'up' : 'dn'] : null,
+        ps && k.maju_r != null ? ['Harga maju dari L1', sR(k.maju_r)] : null,
         ...(k.alasan || []).slice(0, 3).map((x, i) => [i ? '' : 'Alasan', esc(x)])] }; },
   rc_range: (el, a, st) => { const k = st.rencana?.utama || {}, dp = dpOf();
     return { j: 'Range sesi', t: 'High dan low range awal hari yang menjadi patokan strategi sesi; strategi menunggu harga menembus range ini.', kv: [['High', fmt(k.range?.[1], dp)], ['Low', fmt(k.range?.[0], dp)]] }; },
-  rc_layer: { j: 'Layer piramida', t: 'Posisi tambahan (L2, L3, ...) hanya dibuka saat harga sudah maju searah; total rugi terburuk tetap sekitar 1R.' },
+  rc_layer: { j: 'Layer piramida', t: ['Posisi tambahan (L2, L3, ...) hanya dibuka saat harga sudah maju searah; total rugi terburuk tetap sekitar 1R.',
+    'Pada posisi berjalan: "terisi" = layer yang sudah masuk; layer berikutnya dipasang sebagai buy/sell stop, dan setelah terisi SL semua layer digeser ke angka setelah panah.'] },
+  rc_slgeser: (el, a, st) => { const k = st.rencana?.utama || {}, ps = k.posisi || {}, dp = dpOf();
+    return { j: 'SL sudah digeser (trailing)', t: [`Saat sinyal masuk, SL ${ARAH(k.arah)} ditaruh ${k.arah < 0 ? 'di atas' : 'di bawah'} entry (SL awal ${fmt(ps.sl_awal, dp)}). Setelah harga maju, SL ikut digeser mengikuti harga terbaik sesuai aturan trailing strategi.`,
+      ps.kunci ? `Sekarang SL sudah melewati ${ps.terisi > 1 ? 'harga rata-rata basket' : 'entry'}: bila kena, posisi ditutup untung ${sR(ps.r_sl)}.` : `Bila kena sekarang, hasil basket ${sR(ps.r_sl)}.`],
+      kv: [['SL awal', fmt(ps.sl_awal, dp)], ['SL sekarang', fmt(k.sl, dp)], ps.terbaik != null ? ['Harga terbaik sejak masuk', fmt(ps.terbaik, dp)] : null], c: esc(k.trailing || '') }; },
   rc_offset: (el, a, st) => ({ j: 'Selisih harga Exness', t: `Harga BTCUSDm di Exness berbeda ${sgn(st.offset_exness)}${fmt(st.offset_exness, 2)} dari Binance. Saat memasang order di Exness, geser entry, SL, dan TP sebesar selisih ini.` }),
   rc_pf: { j: 'Profit factor', t: 'Total untung dibagi total rugi pada uji strategi. Di atas 1 = untung; 1,3 ke atas tergolong bagus.' },
   rc_wr: { j: 'Persentase menang', t: 'Persentase transaksi uji yang ditutup untung.' },
@@ -724,7 +779,7 @@ const KET = {
   rc_dd95: { j: 'DD95', t: 'Drawdown (penurunan dari puncak) yang tidak terlampaui di 95% simulasi Monte Carlo, dalam R. Contoh: 8R dengan risiko 1% per posisi = turun sekitar 8%.' },
   rc_sumber: { j: 'Sumber statistik', t: 'Asal angka statistik di baris ini (hasil lab otonom atau preset teruji).' },
   rc_fwd: { j: 'Forward-test', t: 'Hasil nyata sejak sinyal strategi ini mulai dicatat otomatis: jumlah sinyal, persentase menang, dan total R.' },
-  salin: { j: 'Salin order', t: 'Menyalin rencana order dalam format MT5 (simbol, arah, entry, SL, TP, lot) ke clipboard. Untuk XAUUSDm, level dihitung dari proxy PAXG x spot.' },
+  salin: { j: 'Salin order', t: 'Menyalin rencana order dalam format MT5 (simbol, arah, entry, SL, TP, lot) ke clipboard. Untuk XAUUSDm, level dihitung dari proxy PAXG x spot. Bila posisi strategi sudah berjalan, yang disalin adalah teks kelola posisi (layer terisi, SL semua layer, layer berikutnya), bukan order baru.' },
   alt: { j: 'Strategi lain', t: 'Strategi lain untuk mode ini beserta status, grade, pemicu, dan harga entry/SL-nya.' },
   lab: { j: 'Lab strategi', t: 'Hasil lab otonom per strategi: profit factor per segmen, drawdown, Monte Carlo, biaya 2x. Lab juga bisa dijalankan ulang dari sini.' },
   jurnal: { j: 'Jurnal forward-test', t: 'Setiap sinyal strategi dan hasilnya (masuk, SL, TP, keluar, R) dicatat otomatis.' },
